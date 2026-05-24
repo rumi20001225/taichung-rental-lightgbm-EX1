@@ -1,0 +1,207 @@
+臺中市租屋每坪租金預測 WebApp：HuggingFace Spaces 部署說明
+========================================================
+
+本文件說明如何將目前這個 Solara + LightGBM 租金預測 WebApp 部署到 HuggingFace Spaces。
+
+一、在 HuggingFace 建立 Space
+-----------------------------
+
+1. 登入 HuggingFace：
+   https://huggingface.co
+
+2. 進入 Spaces 頁面：
+   https://huggingface.co/spaces
+
+3. 點選「Create new Space」。
+
+4. 建立 Space 時建議填寫：
+   - Space name：例如 `taichung-rental-lightgbm`
+   - License：依資料與課程授權選擇
+   - Visibility：建議初期使用 Private，測試完成後再改 Public
+   - SDK：選擇 Docker
+   - Hardware：先使用 CPU basic；若 build 或啟動太慢，再視情況升級硬體
+
+5. 建立後，HuggingFace 會產生一個 Space Git repository，例如：
+
+   https://huggingface.co/spaces/YOUR_USERNAME/taichung-rental-lightgbm
+
+本專案使用 Docker Space，原因是 Solara 並非 HuggingFace 的 Gradio 或 Streamlit 原生 SDK，而 Docker Space 可執行自訂 Python WebApp。
+
+二、哪些檔案要 push 到 HuggingFace Space
+----------------------------------------
+
+建議 push 下列檔案與資料夾：
+
+- `app.py`
+- `Dockerfile`
+- `README.md`
+- `requirements.txt`
+- `.gitattributes`
+- `.gitignore`
+- `src/`
+- `scripts/`
+- `artifacts/`
+- `Taichung_rental_houses_v4.gpkg`
+- `POIs/`
+
+可不 push 的檔案：
+
+- `20260428_ML_rental_prediction.ipynb`
+- `20260310_Dist_to_Nearest_POI.ipynb`
+- `__pycache__/`
+- `.ipynb_checkpoints/`
+- `.venv/` 或其他本機虛擬環境資料夾
+
+Notebook 是建模與空間運算邏輯的參考來源，但 WebApp 執行不需要它們。若放進 Space，會增加 repository 大小與部署負擔。
+
+三、如何 push 到 HuggingFace Space
+----------------------------------
+
+方法一：使用 Git
+
+在目前 WebApp 專案目錄執行：
+
+```powershell
+git init
+git add .
+git commit -m "Initial Solara LightGBM rental prediction app"
+git branch -M main
+git remote add space https://huggingface.co/spaces/YOUR_USERNAME/taichung-rental-lightgbm
+git push -u space main
+```
+
+若 HuggingFace 要求登入，建議先安裝 HuggingFace CLI 並登入：
+
+```powershell
+python -m pip install -U huggingface_hub
+hf auth login
+```
+
+登入後再執行 git push。
+
+方法二：使用 HuggingFace CLI 上傳整個資料夾
+
+```powershell
+python -m pip install -U huggingface_hub
+hf auth login
+hf upload YOUR_USERNAME/taichung-rental-lightgbm . --repo-type space
+```
+
+此方法適合第一次上傳大量資料檔，或不想手動處理 Git remote 的情況。
+
+四、若同時要保存到 GitHub
+--------------------------
+
+HuggingFace Space 本身就是 Git repository，但你也可以同時保留 GitHub repository 作為課程開發版：
+
+```powershell
+git remote add origin https://github.com/YOUR_GITHUB_USERNAME/taichung-rental-lightgbm.git
+git push -u origin main
+git push -u space main
+```
+
+之後修改程式時：
+
+```powershell
+git add .
+git commit -m "Update app"
+git push origin main
+git push space main
+```
+
+GitHub 可作為教學與版本管理倉庫；HuggingFace Space 則是實際部署與執行 WebApp 的倉庫。
+
+五、每個資料夾與檔案的作用
+--------------------------
+
+`app.py`
+Solara WebApp 的入口檔。HuggingFace Docker 容器啟動後會執行 `solara run app.py`，此檔載入 `src.ui.Page` 作為頁面元件。
+
+`Dockerfile`
+定義 HuggingFace Docker Space 如何建置與啟動 WebApp。它安裝系統套件、Python 套件，複製專案內容，開啟 7860 port，最後執行 Solara。
+
+`README.md`
+同時是 Space 的說明頁與設定檔。最上方 YAML metadata 中的 `sdk: docker` 與 `app_port: 7860` 是 HuggingFace Space 部署設定。
+
+`requirements.txt`
+Python 套件需求清單，包括 Solara、leafmap、ipyleaflet、GeoPandas、LightGBM、SHAP、NetworkX、scikit-learn 等。
+
+`.gitattributes`
+標記 `.gpkg` 與 `.joblib` 為大型二進位檔。這有助於 Git LFS / HuggingFace Xet 等大型檔案處理機制辨識資料檔。
+
+`.gitignore`
+排除 Python 快取、虛擬環境、暫存檔與不需要部署的本機檔案。
+
+`src/`
+WebApp 的主要 Python 程式碼。
+
+`src/config.py`
+集中管理資料路徑、特徵欄位、POI 圖層名稱、核心區定義與特徵說明。
+
+`src/model.py`
+負責 LightGBM 模型訓練、模型載入、特徵工程、連續變數標準化、模型表現指標、SHAP / 特徵重要性整理與租金預測。
+
+`src/spatial.py`
+負責空間區位特徵計算，包括：
+- 至火車站、捷運站、YouBike、交流道、公園、學校的道路距離
+- 至寺廟的直線距離
+- 500 公尺環域內商店、公車站、醫療診所數量
+- 是否位於核心商業區
+- 目標點鄰近租屋樣本的空間滯後特徵
+
+`src/map_view.py`
+負責 leafmap / ipyleaflet 互動式地圖。它會載入租屋點位，以紅色漸層顯示 `ln_rent`，並處理地圖點選與目標座標更新。
+
+`src/ui.py`
+負責 Solara 使用者介面，包括首頁儀表板、模型指標、表格面板、地圖預測頁、右側輸入表單與預測結果呈現。
+
+`scripts/`
+輔助腳本資料夾。
+
+`scripts/train_model.py`
+重新訓練 LightGBM 模型，並輸出 `artifacts/lightgbm_rent_model.joblib`。
+
+`scripts/build_spatial_cache.py`
+重新建立道路網與 POI 空間快取，並輸出 `artifacts/spatial_cache.joblib`。
+
+`artifacts/`
+儲存已生成的模型與空間快取。建議 push 到 Space，因為這能減少 HuggingFace Space 首次啟動時的等待時間。
+
+`artifacts/lightgbm_rent_model.joblib`
+已訓練 LightGBM 模型、scaler、模型指標、特徵重要性、SHAP 摘要與租屋點 KNN 空間滯後所需資料。
+
+`artifacts/spatial_cache.joblib`
+已建立的道路網、POI 最近距離結果、POI 座標樹與行政區圖層快取。
+
+`Taichung_rental_houses_v4.gpkg`
+主要訓練資料與地圖租屋點來源。
+
+`POIs/`
+空間區位特徵計算所需圖層資料夾。
+
+`POIs/Taichung_youbikes.gpkg`
+YouBike 站點圖資，圖層名稱為 `youbike20`。本 WebApp 會使用此圖層計算 `ln_dist_road_ubike`，不使用其他替代資料。
+
+六、部署完成後如何檢查
+----------------------
+
+push 完後，回到 HuggingFace Space 頁面，查看 Logs：
+
+- `Building`：正在建置 Docker image。
+- `Running`：部署成功。
+- 若失敗，先檢查 logs 是否出現缺檔，例如缺少 `Taichung_youbikes.gpkg`、`Taichung_rental_houses_v4.gpkg`，或 POI 圖層名稱不符。
+
+本專案 Dockerfile 會執行：
+
+```bash
+solara run app.py --host=0.0.0.0 --port=7860
+```
+
+HuggingFace Space 會將外部流量導向 `app_port: 7860`。
+
+七、參考官方文件
+----------------
+
+- HuggingFace Docker Spaces：https://huggingface.co/docs/hub/main/en/spaces-sdks-docker
+- HuggingFace Hub 上傳檔案：https://huggingface.co/docs/huggingface_hub/guides/upload
+- HuggingFace Repository 入門：https://huggingface.co/docs/hub/repositories-getting-started

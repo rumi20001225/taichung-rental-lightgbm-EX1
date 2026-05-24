@@ -1,0 +1,120 @@
+臺中市租屋每坪租金預測 WebApp：日後維護實務建議
+================================================
+
+一、是否需要另建 GitHub repository？
+-----------------------------------
+
+HuggingFace Space 本身就是 Git repository，因此如果目前需求只是：
+
+1. 部署 WebApp。
+2. 保留每次上傳的 commit history。
+3. 回溯版本。
+4. 管理 Space 內的檔案。
+
+那麼只保留 HuggingFace Space repository 也可以。
+
+不過，如果此 WebApp 後續會持續開發、課堂展示、多人協作、公開分享，或需要比較正式的版本管理，建議另外保留一份 GitHub repository。
+
+
+二、建議的實務分工
+------------------
+
+建議將兩個平台分工如下：
+
+HuggingFace Space：
+
+- 作為部署與執行 WebApp 的平台。
+- 讓使用者直接開啟網頁、操作互動式地圖、輸入房屋屬性並取得租金預測結果。
+- 保存部署用的 Dockerfile、requirements.txt、app.py、src、artifacts、POIs、GPKG 資料等必要檔案。
+
+GitHub：
+
+- 作為主要開發與版本管理平台。
+- 保存完整專案原始碼、文件、issue、pull request、branch 與 release 紀錄。
+- 適合日後追蹤功能修改、錯誤修正、模型更新、資料更新與文件修訂。
+
+簡單來說，建議採用：
+
+GitHub 作為 source of truth。
+HuggingFace Space 作為 deployment target。
+
+
+三、建議的 Git remote 設定方式
+------------------------------
+
+不要維護兩份彼此無關的 repository。比較好的做法是讓同一份本機 Git repository 同時設定兩個 remote：
+
+origin：指向 GitHub repository。
+hf：指向 HuggingFace Space repository。
+
+範例：
+
+git remote add origin https://github.com/你的帳號/你的repo.git
+git remote add hf https://huggingface.co/spaces/Chingmu/taichung-rental-lightgbm
+
+日常開發時推送到 GitHub：
+
+git push origin main
+
+需要部署時推送到 HuggingFace Space：
+
+git push hf main
+
+
+四、什麼情境只用 HuggingFace Space 就足夠？
+------------------------------------------
+
+如果這個 WebApp 主要是短期展示、課堂作業、個人測試，且後續不需要多人協作或複雜的版本管理，那麼只使用 HuggingFace Space 即可。
+
+HuggingFace Space 已經能保存 commit history，也能讓 WebApp 直接部署和執行。
+
+
+五、什麼情境建議保留 GitHub？
+----------------------------
+
+如果有以下任一需求，建議保留 GitHub repository：
+
+1. WebApp 會持續增加功能。
+2. 模型、訓練資料或 POI 圖資會持續更新。
+3. 需要記錄 bug、待辦事項或使用者回饋。
+4. 需要多人協作。
+5. 需要建立 branch 或 pull request。
+6. 需要公開專案文件與開發歷程。
+7. 需要將 HuggingFace Space 視為穩定部署端，而不是主要開發端。
+
+
+六、關於大型檔案與 Git LFS
+--------------------------
+
+本專案包含 GeoPackage 圖資與模型 artifacts，例如：
+
+- Taichung_rental_houses_v4.gpkg
+- POIs/*.gpkg
+- artifacts/*.joblib
+
+這些檔案通常較大，若放在 GitHub 或 HuggingFace Space repository，都建議使用 Git LFS 管理。
+
+目前專案中的 .gitattributes 已設定：
+
+*.gpkg filter=lfs diff=lfs merge=lfs -text
+*.joblib filter=lfs diff=lfs merge=lfs -text
+
+這代表 .gpkg 與 .joblib 檔案會透過 Git LFS 管理，這是合適的設定。
+
+
+七、建議結論
+------------
+
+短期展示或課堂作業：
+
+只使用 HuggingFace Space 即可。
+
+長期維護、公開專案或多人協作：
+
+建議保留 GitHub repository，並將 HuggingFace Space 視為部署端。
+
+最佳實務：
+
+GitHub 管理開發版本。
+HuggingFace Space 執行正式部署版本。
+
